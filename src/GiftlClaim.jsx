@@ -146,7 +146,7 @@ export default function ClaimGift() {
               Follow us on Instagram for more offers!
             </p>
 
-            
+            <a
               href="https://instagram.com"
               target="_blank"
               rel="noreferrer"
