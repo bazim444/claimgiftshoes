@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export default function ClaimGift() {
   const [phone, setPhone] = useState("");
@@ -6,6 +6,8 @@ export default function ClaimGift() {
   const [error, setError] = useState("");
   const [apiError, setApiError] = useState("");
   const [serverReady, setServerReady] = useState(false);
+  const [telegramUser, setTelegramUser] = useState(null);
+  const telegramRef = useRef(null);
 
   // Wake up Render server on page load
   useEffect(() => {
@@ -21,7 +23,41 @@ export default function ClaimGift() {
       });
   }, []);
 
+  // Load Telegram Widget
+  useEffect(() => {
+    // Set global callback
+    window.onTelegramAuth = (user) => {
+      console.log("Telegram user:", user);
+      setTelegramUser(user);
+    };
+
+    // Create script
+    const script = document.createElement("script");
+    script.src = "https://telegram.org/js/telegram-widget.js?22";
+    script.setAttribute("data-telegram-login", "Shoegiftclaim_bot"); // ← your bot username
+    script.setAttribute("data-size", "large");
+    script.setAttribute("data-radius", "10");
+    script.setAttribute("data-onauth", "onTelegramAuth(user)");
+    script.setAttribute("data-request-access", "write");
+    script.async = true;
+
+    if (telegramRef.current) {
+      telegramRef.current.innerHTML = "";
+      telegramRef.current.appendChild(script);
+    }
+
+    return () => {
+      if (telegramRef.current) {
+        telegramRef.current.innerHTML = "";
+      }
+    };
+  }, []);
+
   const handleClaim = async () => {
+    if (!telegramUser) {
+      setError("Please login with Telegram first");
+      return;
+    }
     if (phone.length < 10) {
       setError("Please enter a valid 10 digit mobile number");
       return;
@@ -35,9 +71,9 @@ export default function ClaimGift() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: `+91${phone}`,
-          name: "N/A",
-          telegram: "N/A",
-          telegramId: "N/A"
+          name: `${telegramUser.first_name} ${telegramUser.last_name ?? ""}`.trim(),
+          telegram: `@${telegramUser.username ?? "N/A"}`,
+          telegramId: String(telegramUser.id)
         })
       });
       const data = await response.json();
@@ -62,7 +98,6 @@ export default function ClaimGift() {
           <path d="M12 2.163c3.204 0 3.584.012 4.85.07 1.366.062 2.633.337 3.608 1.312.975.975 1.25 2.242 1.312 3.608.058 1.266.07 1.646.07 4.85s-.012 3.584-.07 4.85c-.062 1.366-.337 2.633-1.312 3.608-.975.975-2.242 1.25-3.608 1.312-1.266.058-1.646.07-4.85.07s-3.584-.012-4.85-.07c-1.366-.062-2.633-.337-3.608-1.312-.975-.975-1.25-2.242-1.312-3.608C2.175 15.584 2.163 15.204 2.163 12s.012-3.584.07-4.85c.062-1.366.337-2.633 1.312-3.608.975-.975 2.242-1.25 3.608-1.312C8.416 2.175 8.796 2.163 12 2.163zm0-2.163C8.741 0 8.333.014 7.053.072 5.197.157 3.355.673 2.014 2.014.673 3.355.157 5.197.072 7.053.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.085 1.856.601 3.698 1.942 5.039 1.341 1.341 3.183 1.857 5.039 1.942C8.333 23.986 8.741 24 12 24s3.668-.014 4.948-.072c1.856-.085 3.698-.601 5.039-1.942 1.341-1.341 1.857-3.183 1.942-5.039.058-1.28.072-1.689.072-4.948 0-3.259-.014-3.667-.072-4.947-.085-1.856-.601-3.698-1.942-5.039C20.698.673 18.856.157 17.0.072 15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zm0 10.162a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
         </svg>
         <span style={styles.instaText}>@shoebrand.official</span>
-        {/* Server status indicator */}
         <span style={{
           marginLeft: "auto",
           fontSize: 11,
@@ -81,18 +116,46 @@ export default function ClaimGift() {
               Claim your exclusive pair of sneakers — limited offer!
             </p>
             <div style={styles.giftBox}>🎁</div>
-            <p style={styles.label}>Enter your mobile number to claim:</p>
 
-            <div style={styles.inputRow}>
-              <span style={styles.flag}>🇮🇳 +91</span>
-              <input
-                style={styles.input}
-                type="tel"
-                placeholder="98765 43210"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/, ""))}
-                maxLength={10}
-              />
+            {/* Step 1 - Telegram Login */}
+            <div style={styles.stepBox}>
+              <p style={styles.stepLabel}>Step 1 — Connect Telegram:</p>
+              {!telegramUser ? (
+                <div ref={telegramRef} style={styles.telegramWidget}></div>
+              ) : (
+                <div style={styles.telegramConnected}>
+                  <img
+                    src={telegramUser.photo_url}
+                    style={styles.telegramPhoto}
+                    alt="profile"
+                    onError={(e) => e.target.style.display = 'none'}
+                  />
+                  <div>
+                    <p style={styles.telegramName}>
+                      ✅ {telegramUser.first_name} {telegramUser.last_name ?? ""}
+                    </p>
+                    <p style={styles.telegramUsername}>
+                      @{telegramUser.username ?? "N/A"}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Step 2 - Phone */}
+            <div style={styles.stepBox}>
+              <p style={styles.stepLabel}>Step 2 — Enter Mobile Number:</p>
+              <div style={styles.inputRow}>
+                <span style={styles.flag}>🇮🇳 +91</span>
+                <input
+                  style={styles.input}
+                  type="tel"
+                  placeholder="98765 43210"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/, ""))}
+                  maxLength={10}
+                />
+              </div>
             </div>
 
             {error && <p style={styles.error}>{error}</p>}
@@ -139,7 +202,20 @@ export default function ClaimGift() {
 
             <div style={styles.claimedCard}>
               <p style={styles.claimedLabel}>Claimed by</p>
+              {telegramUser?.photo_url && (
+                <img
+                  src={telegramUser.photo_url}
+                  style={{...styles.telegramPhoto, margin: "8px auto"}}
+                  alt="profile"
+                />
+              )}
+              <p style={styles.claimedPhone}>
+                {telegramUser?.first_name} {telegramUser?.last_name ?? ""}
+              </p>
               <p style={styles.claimedPhone}>+91 {phone}</p>
+              <p style={{...styles.claimedPhone, color: "#00c896", fontSize: 14}}>
+                @{telegramUser?.username ?? "N/A"}
+              </p>
             </div>
 
             <p style={styles.followText}>
@@ -215,6 +291,45 @@ const styles = {
   },
   giftBox: {
     fontSize: 48,
+  },
+  stepBox: {
+    width: "100%",
+  },
+  stepLabel: {
+    color: "#ffffff99",
+    fontSize: 13,
+    marginBottom: 8,
+  },
+  telegramWidget: {
+    display: "flex",
+    justifyContent: "center",
+    minHeight: 50,
+  },
+  telegramConnected: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    background: "#00c89622",
+    border: "1px solid #00c89644",
+    borderRadius: 12,
+    padding: "10px 16px",
+  },
+  telegramPhoto: {
+    width: 40,
+    height: 40,
+    borderRadius: "50%",
+    objectFit: "cover",
+  },
+  telegramName: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: 600,
+    margin: 0,
+  },
+  telegramUsername: {
+    color: "#00c896",
+    fontSize: 12,
+    margin: 0,
   },
   label: {
     color: "#ffffff99",
